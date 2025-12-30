@@ -658,6 +658,12 @@ class Config:
     data_factor: int = 4
     # Directory to save results
     result_dir: str = "results/garden"
+    # Video path for auto-converting video to dataset
+    video_path: Optional[str] = None
+    # FPS for extracting frames from video
+    video_fps: float = 2.0
+    # COLMAP matcher type
+    colmap_matcher: Literal["exhaustive_matcher", "sequential_matcher"] = "exhaustive_matcher"
     # Every N images there is a test image
     test_every: int = 8
     # Enable evaluation
@@ -983,15 +989,21 @@ class Runner:
         viewmat = c2w.inverse()
 
         try:
-            # Infer SH degree from colors shape [N, (deg+1)^2, 3]
-            sh_degree = int(math.sqrt(self.splats["colors"].shape[1])) - 1
-            
+            # Reconstruct colors from sh0 and shN if needed
+            if "colors" in self.splats:
+                colors = self.splats["colors"]
+                sh_degree = int(math.sqrt(colors.shape[1])) - 1
+            else:
+                sh0 = self.splats["sh0"]
+                shN = self.splats["shN"]
+                colors = torch.cat([sh0, shN], dim=1)
+                sh_degree = int(math.sqrt(colors.shape[1])) - 1
+
             # Apply activations to raw parameters
             means = self.splats["means"]
             quats = F.normalize(self.splats["quats"], dim=-1)
             scales = torch.exp(self.splats["scales"])
             opacities = torch.sigmoid(self.splats["opacities"])
-            colors = self.splats["colors"]
 
             render_colors, _, _ = rasterization(
                 means, quats, scales, opacities, colors,
@@ -1449,6 +1461,26 @@ class Runner:
 
 
 def main(cfg: Config):
+    if cfg.video_path is not None:
+        if not os.path.exists(cfg.video_path):
+             raise FileNotFoundError(f"Video file not found: {cfg.video_path}")
+        
+        print(f"Processing video: {cfg.video_path}")
+        video_name = os.path.splitext(os.path.basename(cfg.video_path))[0]
+        data_dir = os.path.join("data", video_name)
+        
+        # 1. Video to Images
+        from video2imgs import extract_frames
+        extract_frames(cfg.video_path, os.path.join(data_dir, "images"), fps=cfg.video_fps)
+
+        # 2. Images to Poses
+        from imgs2poses import gen_poses
+        gen_poses(data_dir, cfg.colmap_matcher)
+
+        cfg.data_dir = data_dir
+        if cfg.result_dir == "results/garden": # If default, change it
+            cfg.result_dir = os.path.join("results", video_name)
+
     if cfg.data_folder is not None:
         # Batch processing
         data_root = cfg.data_folder

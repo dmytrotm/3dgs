@@ -1,40 +1,23 @@
-# Core dependencies
-torch>=2.0.0
-numpy>=1.24.0
+# assume torch is already installed
 
-# 3D Gaussian Splatting
-gsplat>=0.1.0
+# pycolmap for data parsing
+git+https://github.com/rmbrualla/pycolmap@cc7ea4b7301720ac29287dbe450952511b32125e
+# (optional) nerfacc for torch version rasterization 
+# git+https://github.com/nerfstudio-project/nerfacc
 
-# COLMAP integration
-pycolmap>=0.6.0
-
-# Point cloud handling
-plyfile>=0.9.0
-
-# Computer vision
-opencv-python>=4.8.0
-
-# Machine learning utilities
-scikit-learn>=1.3.0
-scipy>=1.11.0
-
-# Metrics and evaluation
-torchmetrics>=1.2.0
-lpips>=0.1.4
-
-# Visualization
-matplotlib>=3.7.0
-imageio>=2.31.0
-imageio-ffmpeg>=0.4.9
-
-# Web viewer (viser + nerfview)
-viser>=0.1.0
-nerfview>=0.0.3
-
-# Configuration and CLI
-tyro>=0.5.0
-tqdm>=4.65.0
-tensorboard>=2.14.0
-
-# Optional: faster SSIM computation
-# fused-ssim>=0.0.1
+viser
+nerfview==0.0.2
+imageio[ffmpeg]
+numpy<2.0.0
+scikit-learn
+tqdm
+torchmetrics[image]
+opencv-python
+tyro>=0.8.8
+Pillow
+tensorboard
+tensorly
+pyyaml
+matplotlib
+git+https://github.com/rahul-goel/fused-ssim@1272e21a282342e89537159e4bad508b19b34157
+plyfile
