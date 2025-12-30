@@ -139,6 +139,10 @@ python viewer.py --port 8080
 
 Then open your browser and navigate to `http://localhost:8080`.
 
+### Live Training View
+
+The trainer automatically launches a live viewer at `http://localhost:8080` (or specified port) so you can monitor progress in real-time.
+
 ### Viewer controls
 
 - **Left-click + drag**: Rotate camera

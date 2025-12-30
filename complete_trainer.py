@@ -29,6 +29,8 @@ from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from typing_extensions import Literal, assert_never
 
 # Import gsplat global dependencies
+import viser
+import nerfview
 from gsplat.rendering import rasterization
 from gsplat.strategy import DefaultStrategy, MCMCStrategy
 from gsplat.optimizers import SelectiveAdam
@@ -755,6 +757,8 @@ class Config:
     tb_save_image: bool = False
 
     lpips_net: Literal["vgg", "alex"] = "alex"
+    # Port for the live viewer server
+    viewer_port: int = 8080
 
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]
@@ -961,6 +965,46 @@ class Runner:
             self.lpips = LearnedPerceptualImagePatchSimilarity(
                 net_type="vgg", normalize=False
             ).to(self.device)
+
+        if cfg.viewer_port > 0:
+            print(f"Starting viewer at http://localhost:{cfg.viewer_port}")
+            self.server = viser.ViserServer(port=cfg.viewer_port, verbose=False)
+            self.viewer = nerfview.Viewer(
+                server=self.server,
+                render_fn=self._viewer_render_fn,
+                mode="rendering",
+            )
+
+    @torch.no_grad()
+    def _viewer_render_fn(self, camera_state: nerfview.CameraState, img_wh: Tuple[int, int]):
+        width, height = img_wh
+        c2w = torch.from_numpy(camera_state.c2w).float().to(self.device)
+        K = torch.from_numpy(camera_state.get_K(img_wh)).float().to(self.device)
+        viewmat = c2w.inverse()
+
+        try:
+            # Infer SH degree from colors shape [N, (deg+1)^2, 3]
+            sh_degree = int(math.sqrt(self.splats["colors"].shape[1])) - 1
+            
+            # Apply activations to raw parameters
+            means = self.splats["means"]
+            quats = F.normalize(self.splats["quats"], dim=-1)
+            scales = torch.exp(self.splats["scales"])
+            opacities = torch.sigmoid(self.splats["opacities"])
+            colors = self.splats["colors"]
+
+            render_colors, _, _ = rasterization(
+                means, quats, scales, opacities, colors,
+                viewmat[None], K[None],
+                width, height,
+                sh_degree=sh_degree,
+                render_mode="RGB",
+                radius_clip=3,
+            )
+            return render_colors[0, ..., 0:3].cpu().numpy()
+        except Exception as e:
+            print(f"Viewer render error: {e}")
+            return np.zeros((height, width, 3), dtype=np.float32)
 
     def rasterize_splats(
         self,
